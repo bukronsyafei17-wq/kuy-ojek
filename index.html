@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kuy Ojek Indralaya</title>
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .active-tab { border-bottom: 4px solid white; font-weight: bold; }
+        body { max-width: 500px; margin: 0 auto; background-color: #f3f4f6; min-height: 100vh; }
+    </style>
+</head>
+<body>
+
+    <!-- Navigasi -->
+    <nav class="bg-green-600 text-white p-4 sticky top-0 z-50 shadow-md">
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-xl font-black italic tracking-tighter">KUY OJEK</h1>
+            <button id="logoutBtn" class="hidden bg-red-500 px-3 py-1 rounded text-xs">Keluar</button>
+        </div>
+        <div id="tabNav" class="hidden flex justify-around text-sm">
+            <button onclick="switchTab('user')" id="tabUser" class="pb-2 active-tab uppercase">Penumpang</button>
+            <button onclick="switchTab('driver')" id="tabDriver" class="pb-2 uppercase">Driver</button>
+        </div>
+    </nav>
+
+    <!-- Halaman Login -->
+    <div id="loginArea" class="p-6 mt-10">
+        <div class="bg-white p-8 rounded-2xl shadow-xl text-center">
+            <i class="fas fa-motorcycle text-6xl text-green-600 mb-4"></i>
+            <h2 class="text-2xl font-bold mb-2">Indralaya</h2>
+            <p class="text-gray-500 mb-6 text-sm">Ojek Online Lokal Ogan Ilir</p>
+            <input id="email" type="email" placeholder="Email Anda" class="w-full border p-3 mb-3 rounded-lg outline-green-500">
+            <input id="pass" type="password" placeholder="Password" class="w-full border p-3 mb-6 rounded-lg outline-green-500">
+            <button onclick="auth()" class="w-full bg-green-600 text-white p-4 rounded-xl font-bold hover:bg-green-700 transition">MASUK / DAFTAR</button>
+        </div>
+    </div>
+
+    <!-- Halaman Penumpang -->
+    <div id="userArea" class="hidden p-4">
+        <div class="bg-white p-5 rounded-xl shadow-md mb-6">
+            <h3 class="font-bold text-lg mb-4 text-green-700"><i class="fas fa-map-marker-alt"></i> Pesan Ojek</h3>
+            <input id="pickup" type="text" placeholder="Jemput di mana? (Cth: Timbangan)" class="w-full border p-3 mb-3 rounded-lg text-sm bg-gray-50">
+            <input id="dest" type="text" placeholder="Tujuan? (Cth: Komplek Unsri)" class="w-full border p-3 mb-4 rounded-lg text-sm bg-gray-50">
+            <button onclick="cekHarga()" class="w-full bg-gray-800 text-white p-3 rounded-lg font-bold mb-3">CEK HARGA</button>
+            
+            <div id="hargaArea" class="hidden bg-green-100 p-4 rounded-lg text-center border-2 border-green-500">
+                <p class="text-sm text-green-700">Tarif Indralaya:</p>
+                <p id="totalHarga" class="text-3xl font-black text-green-800"></p>
+                <button onclick="orderNow()" class="mt-3 w-full bg-green-600 text-white p-3 rounded-lg font-bold shadow-lg">PESAN SEKARANG</button>
+            </div>
+        </div>
+
+        <div id="myOrders">
+            <h4 class="font-bold text-gray-600 mb-3 ml-1">Pesanan Saya:</h4>
+            <div id="userOrderList" class="space-y-3 pb-10"></div>
+        </div>
+    </div>
+
+    <!-- Halaman Driver -->
+    <div id="driverArea" class="hidden p-4">
+        <div class="bg-blue-600 text-white p-4 rounded-xl shadow-lg mb-6 flex justify-between items-center">
+            <div>
+                <p class="text-xs opacity-80 uppercase tracking-widest">Driver Mode</p>
+                <h2 class="text-xl font-bold">SIAP BEKERJA</h2>
+            </div>
+            <i class="fas fa-toggle-on text-3xl"></i>
+        </div>
+        <h4 class="font-bold text-gray-600 mb-3 ml-1">Orderan Masuk:</h4>
+        <div id="driverOrderList" class="space-y-3 pb-10"></div>
+    </div>
+
+    <!-- Firebase Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, updateDoc, doc, where } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // CONFIG KUY OJEK INDRALAYA
+        const firebaseConfig = {
+            apiKey: "AIzaSyA0yKWJexlrzfxd186DiTR5sIn_rQFaT1M",
+            projectId: "kuy-ojek-indralaya",
+            appId: "1:802905342597:android:381c573eb70fbf034c1f81"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const authObj = getAuth(app);
+        const db = getFirestore(app);
+
+        // Auth Logic
+        window.auth = async () => {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('pass').value;
+            if(!email || !pass) return alert("Email & Password wajib diisi");
+            try {
+                await signInWithEmailAndPassword(authObj, email, pass);
+            } catch (e) {
+                try { await createUserWithEmailAndPassword(authObj, email, pass); }
+                catch (err) { alert("Pendaftaran gagal: " + err.message); }
+            }
+        };
+
+        document.getElementById('logoutBtn').onclick = () => signOut(authObj);
+
+        onAuthStateChanged(authObj, user => {
+            if (user) {
+                document.getElementById('loginArea').classList.add('hidden');
+                document.getElementById('tabNav').classList.remove('hidden');
+                document.getElementById('logoutBtn').classList.remove('hidden');
+                switchTab('user');
+            } else {
+                document.getElementById('loginArea').classList.remove('hidden');
+                document.getElementById('tabNav').classList.add('hidden');
+                document.getElementById('userArea').classList.add('hidden');
+                document.getElementById('driverArea').classList.add('hidden');
+                document.getElementById('logoutBtn').classList.add('hidden');
+            }
+        });
+
+        // Tab Logic
+        window.switchTab = (role) => {
+            if(role === 'user') {
+                document.getElementById('userArea').classList.remove('hidden');
+                document.getElementById('driverArea').classList.add('hidden');
+                document.getElementById('tabUser').classList.add('active-tab');
+                document.getElementById('tabDriver').classList.remove('active-tab');
+                loadUserOrders();
+            } else {
+                document.getElementById('userArea').classList.add('hidden');
+                document.getElementById('driverArea').classList.remove('hidden');
+                document.getElementById('tabDriver').classList.add('active-tab');
+                document.getElementById('tabUser').classList.remove('active-tab');
+                loadDriverOrders();
+            }
+        };
+
+        // User Logic
+        let currentTarif = 0;
+        window.cekHarga = () => {
+            const dest = document.getElementById('dest').value;
+            if(!dest) return alert("Tujuan kosong");
+            currentTarif = 5000 + (dest.length * 250); // Simulasi tarif
+            document.getElementById('totalHarga').innerText = "Rp " + currentTarif.toLocaleString();
+            document.getElementById('hargaArea').classList.remove('hidden');
+        };
+
+        window.orderNow = async () => {
+            const pickup = document.getElementById('pickup').value;
+            const dest = document.getElementById('dest').value;
+            await addDoc(collection(db, "orders"), {
+                user: authObj.currentUser.email,
+                pickup: pickup,
+                dest: dest,
+                price: currentTarif,
+                status: "WAITING",
+                driver_wa: "",
+                time: Date.now()
+            });
+            document.getElementById('hargaArea').classList.add('hidden');
+            alert("Mencari Driver...");
+        };
+
+        function loadUserOrders() {
+            const q = query(collection(db, "orders"), where("user", "==", authObj.currentUser.email), orderBy("time", "desc"));
+            onSnapshot(q, (snapshot) => {
+                let html = '';
+                snapshot.forEach(docSnap => {
+                    const d = docSnap.data();
+                    const btnWa = d.status === 'TAKEN' ? 
+                        `<a href="https://wa.me/${d.driver_wa}?text=Halo KuyOjek, saya penumpang di ${d.pickup}" target="_blank" class="block text-center mt-3 bg-green-500 text-white p-2 rounded-lg font-bold"><i class="fab fa-whatsapp text-lg"></i> HUBUNGI DRIVER</a>` : '';
+                    
+                    html += `
+                        <div class="bg-white p-4 rounded-xl shadow border-l-4 ${d.status === 'WAITING' ? 'border-orange-400' : 'border-green-500'}">
+                            <p class="text-xs text-gray-400 font-mono">${new Date(d.time).toLocaleTimeString()}</p>
+                            <p class="text-sm font-bold">Ke: ${d.dest}</p>
+                            <p class="text-lg font-black text-green-700">Rp ${d.price.toLocaleString()}</p>
+                            <p class="text-xs font-bold ${d.status === 'WAITING' ? 'text-orange-500' : 'text-green-600'} uppercase">
+                                ${d.status === 'WAITING' ? 'Mencari Driver...' : 'Driver Meluncur!'}
+                            </p>
+                            ${btnWa}
+                        </div>`;
+                });
+                document.getElementById('userOrderList').innerHTML = html || '<p class="text-center text-gray-400 mt-10">Belum ada pesanan</p>';
+            });
+        }
+
+        // Driver Logic
+        function loadDriverOrders() {
+            const q = query(collection(db, "orders"), where("status", "==", "WAITING"), orderBy("time", "desc"));
+            onSnapshot(q, (snapshot) => {
+                let html = '';
+                snapshot.forEach(docSnap => {
+                    const d = docSnap.data();
+                    html += `
+                        <div class="bg-white p-4 rounded-xl shadow border-l-4 border-blue-500">
+                            <p class="text-sm"><b>Jemput:</b> ${d.pickup}</p>
+                            <p class="text-sm"><b>Tujuan:</b> ${d.dest}</p>
+                            <div class="flex justify-between items-center mt-3">
+                                <p class="font-black text-blue-700 text-lg">Rp ${d.price.toLocaleString()}</p>
+                                <button onclick="ambilOrder('${docSnap.id}')" class="bg-blue-600 text-white px-5 py-2 rounded-lg font-bold">AMBIL</button>
+                            </div>
+                        </div>`;
+                });
+                document.getElementById('driverOrderList').innerHTML = html || '<p class="text-center text-gray-400 mt-10 text-sm italic">Belum ada orderan masuk di Indralaya...</p>';
+            });
+        }
+
+        window.ambilOrder = async (orderId) => {
+            const wa = prompt("Masukkan nomor WhatsApp Anda (Gunakan 62, Cth: 62812345678):");
+            if(!wa) return;
+            await updateDoc(doc(db, "orders", orderId), {
+                status: "TAKEN",
+                driver_wa: wa.replace(/\D/g,'') // hapus karakter selain angka
+            });
+            alert("Order diambil! Segera hubungi penumpang.");
+        };
+    </script>
+
+    <!-- PWA Script -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+</body>
+</html>
